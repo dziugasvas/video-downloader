@@ -8,7 +8,7 @@ You need [Homebrew](https://brew.sh). In Terminal:
 
 ```bash
 brew install python@3.12 ffmpeg deno
-git clone https://github.com/<your-username>/video-downloader.git
+git clone https://github.com/dziugasvas/video-downloader.git
 cd video-downloader
 chmod +x start.sh update.sh "Video Downloader.command"
 ```
