@@ -17,7 +17,7 @@ Deno is needed for YouTube downloads. You never need to touch it.
 
 ## How to use
 
-1. **Start:** run `./start.sh`, or double-click **Video Downloader.command** in Finder. The first start takes about a minute. Then your browser opens at <http://127.0.0.1:8765>. Keep the Terminal window open while you use the app.
+1. **Start:** run `make run` (or `./start.sh`), or double-click **Video Downloader.command** in Finder. The first start takes about a minute. Then your browser opens at <http://127.0.0.1:8765>. Keep the Terminal window open while you use the app.
 2. **Download:** paste links (one per line), pick a format and quality, then click **Download** (or press `⌘↵`).
 3. **Find your files:** they're saved to `~/Downloads/Videos` by default. Click **Change…** to pick another folder, and use the folder icon next to a finished file to show it in Finder.
 4. **Quit:** press `Ctrl+C` in the Terminal window, or close it.
@@ -31,7 +31,7 @@ Deno is needed for YouTube downloads. You never need to touch it.
 
 Quality: 480p up to 4K, or Best. MP4 above 1080p uses AV1, which plays on most newer devices. Pick 1080p for older phones and TVs.
 
-**If downloads stop working**, YouTube has probably changed something. Click **Update yt-dlp** at the bottom of the app, or run `./update.sh`. The app also checks for updates automatically once a day when it starts.
+**If downloads stop working**, YouTube has probably changed something. Click **Update yt-dlp** at the bottom of the app, or run `make update`. The app also checks for updates automatically once a day when it starts.
 
 The first time you open the `.command` file, macOS may say it can't verify it. Right-click it, choose **Open**, then **Open** again.
 
@@ -45,6 +45,7 @@ downloader/          Download logic (no UI)
   api.py             FastAPI routes
 main.py              The app: serves the page and the routes
 static/              The page: index.html, style.css, app.js
+Makefile             Shortcuts: make run, make update
 start.sh             Set up + start
 update.sh            Update yt-dlp, ffmpeg and Deno
 ```
