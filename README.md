@@ -98,3 +98,7 @@ update.sh            Update yt-dlp, ffmpeg, Deno
 - `.gitignore` excludes video/audio files and the `.venv` folder, so none of them end up on GitHub.
 
 Only download videos you have the right to save offline. Respect each site's terms and the creators' rights. Some sites (e.g. Instagram) only allow downloads when you're logged in, which this app doesn't support.
+
+## Credits
+
+Built with the help of [Claude](https://claude.ai) by Anthropic. The downloading itself is done by [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [ffmpeg](https://ffmpeg.org).
