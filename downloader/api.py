@@ -17,12 +17,13 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from . import system
-from .formats import QUALITIES
+from . import formats
 from .jobs import DEFAULT_FOLDER, DownloadManager
 
 
 class DownloadRequest(BaseModel):
     urls: str  # one or more links, separated by spaces or new lines
+    format: str = "mp4"
     quality: str = "1080"
     folder: str | None = None
 
@@ -64,7 +65,8 @@ def create_router(manager: DownloadManager) -> APIRouter:
         return {
             **info,
             "default_folder": DEFAULT_FOLDER,
-            "qualities": [{"id": k, "label": v} for k, v in QUALITIES.items()],
+            "formats": formats.FORMATS,
+            "qualities": formats.QUALITIES,
         }
 
     @router.get("/downloads")
@@ -73,13 +75,15 @@ def create_router(manager: DownloadManager) -> APIRouter:
 
     @router.post("/downloads")
     def add_downloads(req: DownloadRequest):
-        if req.quality not in QUALITIES:
-            raise HTTPException(400, "Unknown quality.")
+        try:
+            formats.validate(req.format, req.quality)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
         links, skipped = split_links(req.urls)
         if not links:
             raise HTTPException(400, "Paste at least one link (starting with https://).")
         folder = clean_folder(req.folder)
-        jobs = [manager.add(url, req.quality, folder).public() for url in links]
+        jobs = [manager.add(url, req.format, req.quality, folder).public() for url in links]
         return {"jobs": jobs, "skipped": skipped}
 
     @router.post("/downloads/{job_id}/cancel")

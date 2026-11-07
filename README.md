@@ -1,15 +1,26 @@
 # Video Downloader
 
-A small local app for downloading YouTube videos to watch offline. It runs on your Mac and opens in your browser. It uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [ffmpeg](https://ffmpeg.org) to do the actual downloading.
+A small local app for downloading videos to watch offline: from **YouTube and 1,000+ other sites** (Vimeo, TikTok, X, Twitch, SoundCloud and [many more](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)). It runs on your computer and opens in your browser. It uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [ffmpeg](https://ffmpeg.org) to do the actual downloading.
 
 - Paste one or more links: single videos or whole playlists
-- Quality: **720p**, **1080p**, **Best**, or **Audio only** (m4a)
+- Pick a **format** and a **quality** (see below)
 - Progress bar for each download, with cancel. Two downloads run at a time.
 - Choose the folder (default `~/Downloads/Videos`), with **Show in Finder**
 - A list of finished files (kept until you quit the app)
 - No length limit: 2-hour (or 10-hour) videos work fine
 
-Videos are saved as **mp4 with H.264 video and AAC audio** whenever YouTube offers it, so they play on any Mac, iPhone and iPad. YouTube has no H.264 above 1080p, so **Best** uses AV1 for 1440p/4K. AV1 plays on Apple-silicon Macs and iPhone 15 Pro or newer.
+## Formats
+
+| Format | What it is | Plays on |
+|---|---|---|
+| **MP4** (default) | H.264 video + AAC audio | Everything: iPhone, Samsung and other Android phones, Mac, Windows, TVs |
+| **MKV** | Original streams, no conversion (VP9/AV1 + Opus) | Computers and VLC. Phones often can't play it. |
+| **MP3** | Audio only | Anything |
+| **M4A** | Audio only (AAC), smaller than MP3 at the same quality | Anything modern. Great for podcasts. |
+
+**Quality** (for MP4 and MKV): 480p, 720p, 1080p, 1440p, 4K or Best. If a video isn't available in the chosen quality, you get the closest lower one.
+
+YouTube has no H.264 above 1080p, so MP4 at **1440p/4K/Best** uses AV1. AV1 plays on most phones, computers and TVs from the last few years. For older devices, pick **1080p**: that's H.264, which plays everywhere.
 
 ## Setup (once)
 
@@ -19,7 +30,7 @@ You need [Homebrew](https://brew.sh). In Terminal:
 brew install python@3.12 ffmpeg deno
 ```
 
-> **Why Deno?** YouTube now requires yt-dlp to run some JavaScript to unlock video downloads. Deno is the JavaScript runtime yt-dlp uses for that. You never need to touch it.
+> **Why Deno?** YouTube now requires yt-dlp to run some JavaScript to unlock video downloads. Deno is the JavaScript runtime yt-dlp uses for that. You never need to touch it. (Other sites work without it.)
 
 Then get the code and start it:
 
@@ -36,7 +47,7 @@ The first start takes about a minute: the app creates its own Python environment
 
 - **Start:** run `./start.sh`, or double-click **Video Downloader.command** in Finder. Keep the Terminal window open while you use the app.
 - **Quit:** press `Ctrl+C` in that Terminal window, or just close it.
-- **Download:** paste links (one per line), pick a quality, then click **Download** (or press `⌘↵`).
+- **Download:** paste links (one per line), pick a format and quality, then click **Download** (or press `⌘↵`).
 - **Playlists:** a playlist link (`youtube.com/playlist?list=…`) downloads every video into its own subfolder, numbered in order. A link to a single video that happens to be in a playlist (`watch?v=…&list=…`) downloads just that video.
 - **Folder:** click **Change…** for the Mac folder picker, or type a path. The app remembers your choice.
 
@@ -50,14 +61,14 @@ YouTube changes often, and old yt-dlp versions stop working. There are three way
 2. **In the app:** click **Update yt-dlp** at the bottom of the page. No restart needed.
 3. **Manually:** run `./update.sh`. This also updates ffmpeg and Deno through Homebrew.
 
-If a download fails with an error mentioning YouTube, updating is the first thing to try. Run `brew upgrade deno` from time to time as well (`update.sh` does it for you).
+If a download fails with an error mentioning YouTube (or another site), updating is the first thing to try. Run `brew upgrade deno` from time to time as well (`update.sh` does it for you).
 
 ## Project layout
 
 ```
 downloader/          The download logic, as its own module (no UI)
   jobs.py            Queue, progress, cancel, history (runs yt-dlp)
-  formats.py         Which video/audio formats to pick for each quality
+  formats.py         Which streams to pick for each format + quality
   system.py          Mac helpers: Finder, folder picker, updates
   api.py             FastAPI routes (an APIRouter)
 main.py              The app: serves the page and the routes
@@ -86,4 +97,4 @@ update.sh            Update yt-dlp, ffmpeg, Deno
 - Nothing is saved inside the project folder. Downloads go to the folder you choose, and the finished list is cleared when you quit.
 - `.gitignore` excludes video/audio files and the `.venv` folder, so none of them end up on GitHub.
 
-Only download videos you have the right to save offline. Check YouTube's terms and the creator's rights.
+Only download videos you have the right to save offline. Respect each site's terms and the creators' rights. Some sites (e.g. Instagram) only allow downloads when you're logged in, which this app doesn't support.

@@ -1,29 +1,71 @@
-"""yt-dlp format choices for each quality option.
+"""Which streams yt-dlp should pick for each file format + quality.
 
-Video files are mp4 with H.264 video and AAC audio wherever YouTube offers it,
-so they play everywhere (QuickTime, iPhone, iPad). Above 1080p YouTube has no
-H.264, so "best" may use AV1 (plays on Apple-silicon Macs and iPhone 15 Pro or
-newer). VP9 is only used as a last resort because QuickTime can't play it.
+MP4 uses H.264 video + AAC audio whenever the site offers it, so it plays on
+everything: iPhone, Samsung/Android, Mac, Windows, TVs. YouTube has no H.264
+above 1080p, so 1440p/4K MP4 uses AV1 (newer devices). VP9 is avoided in MP4
+because Apple devices can't play it.
 """
 
-QUALITIES = {
-    "720": "720p",
-    "1080": "1080p",
-    "best": "Best",
-    "audio": "Audio only (m4a)",
+from __future__ import annotations
+
+FORMATS = {
+    "mp4": {"label": "MP4", "audio_only": False},
+    "mkv": {"label": "MKV", "audio_only": False},
+    "mp3": {"label": "MP3", "audio_only": True},
+    "m4a": {"label": "M4A", "audio_only": True},
 }
 
-# Video streams Apple devices can play, merged with AAC audio.
-_APPLE_VIDEO = "bv*[vcodec~='^(avc1|av01)']+ba[acodec^=mp4a]"
-_FALLBACK = "bv*+ba/b"
+QUALITIES = {
+    "480": "480p",
+    "720": "720p",
+    "1080": "1080p",
+    "1440": "1440p",
+    "2160": "4K",
+    "best": "Best",
+}
+
+# Video Apple and Android devices can both play, with AAC audio.
+_MP4_VIDEO = "bv*[vcodec~='^(avc1|av01)']+ba[acodec^=mp4a]/bv*[vcodec~='^(avc1|av01)']+ba"
 
 
-def format_options(quality: str) -> tuple[str, list[str]]:
-    """Return (format selector, format sort keys) for a quality option."""
-    if quality == "audio":
-        return "ba[acodec^=mp4a]/ba/b", ["acodec:aac"]
-    if quality in ("720", "1080"):
-        return f"{_APPLE_VIDEO}/{_FALLBACK}", [f"res:{quality}", "vcodec:h264", "acodec:aac"]
-    if quality == "best":
-        return f"{_APPLE_VIDEO}/{_FALLBACK}", ["res", "vcodec:h264", "acodec:aac"]
-    raise ValueError(f"Unknown quality: {quality}")
+def label(fmt: str, quality: str) -> str:
+    f = FORMATS[fmt]
+    return f["label"] if f["audio_only"] else f'{f["label"]} · {QUALITIES[quality]}'
+
+
+def validate(fmt: str, quality: str) -> None:
+    if fmt not in FORMATS:
+        raise ValueError(f"Unknown format: {fmt}")
+    if quality not in QUALITIES:
+        raise ValueError(f"Unknown quality: {quality}")
+
+
+def ytdlp_args(fmt: str, quality: str) -> list[str]:
+    """yt-dlp command-line options for a format + quality."""
+    validate(fmt, quality)
+    res = "res" if quality == "best" else f"res:{quality}"
+
+    if fmt == "mp4":
+        return [
+            "-f", f"{_MP4_VIDEO}/bv*+ba/b",
+            "-S", f"{res},vcodec:h264,acodec:aac",
+            "--merge-output-format", "mp4", "--remux-video", "mp4",
+        ]
+    if fmt == "mkv":
+        # Best streams as they are (VP9/AV1 + Opus), no conversion. For VLC/computers.
+        return [
+            "-f", "bv*+ba/b",
+            "-S", res,
+            "--merge-output-format", "mkv", "--remux-video", "mkv",
+        ]
+    if fmt == "m4a":
+        return [
+            "-f", "ba[acodec^=mp4a]/ba/b", "-S", "acodec:aac",
+            "-x", "--audio-format", "m4a", "--embed-metadata",
+        ]
+    if fmt == "mp3":
+        return [
+            "-f", "ba/b",
+            "-x", "--audio-format", "mp3", "--audio-quality", "0", "--embed-metadata",
+        ]
+    raise ValueError(fmt)

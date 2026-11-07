@@ -8,18 +8,20 @@
   const $ = (id) => document.getElementById(id);
   const ACTIVE = ["queued", "starting", "downloading", "processing"];
 
-  const HINTS = {
-    "720": "Smaller files. Good for phones and long flights.",
-    "1080": "Full HD in H.264. Plays on every Mac, iPhone and iPad.",
-    "best": "Highest quality available. Above 1080p this uses AV1, which plays on Apple-silicon Macs and iPhone 15 Pro or newer.",
-    "audio": "Sound only, as an m4a file. Good for podcasts and talks.",
+  const FORMAT_HINTS = {
+    mp4: "Plays everywhere: iPhone, Samsung and other Android phones, Mac, Windows and TVs.",
+    mkv: "Original quality, no conversion. Best for computers and VLC. Phones may not play it.",
+    mp3: "Audio only. Plays on anything.",
+    m4a: "Audio only, smaller than MP3 at the same quality. Great for podcasts.",
   };
+  const AUDIO_ONLY = ["mp3", "m4a"];
 
   const store = {
     get(key, fallback) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } },
     set(key, value) { try { localStorage.setItem(key, value); } catch { /* ignore */ } },
   };
 
+  let format = store.get("vd.format", "mp4");
   let quality = store.get("vd.quality", "1080");
   let defaultFolder = "~/Downloads/Videos";
   let pollTimer = null;
@@ -87,19 +89,41 @@
     toastTimer = setTimeout(() => t.classList.remove("vd-show"), bad ? 6000 : 3000);
   }
 
-  // ---------- Quality picker ----------
-  function setQuality(q) {
-    if (!HINTS[q]) q = "1080";
-    quality = q;
-    store.set("vd.quality", q);
-    for (const b of $("vd-quality").querySelectorAll("button")) {
-      b.setAttribute("aria-checked", String(b.dataset.q === q));
+  // ---------- Format + quality pickers ----------
+  function markSelected(groupId, value) {
+    for (const b of $(groupId).querySelectorAll("button")) {
+      b.setAttribute("aria-checked", String(b.dataset.v === value));
     }
-    $("vd-quality-hint").textContent = HINTS[q];
   }
+  function updateHint() {
+    let hint = FORMAT_HINTS[format];
+    if (format === "mp4" && ["1440", "2160", "best"].includes(quality)) {
+      hint += " Above 1080p YouTube only offers AV1, which plays on most devices from the last few years. Pick 1080p for older phones and TVs.";
+    }
+    $("vd-hint").textContent = hint;
+  }
+  function setFormat(v) {
+    if (!FORMAT_HINTS[v]) v = "mp4";
+    format = v;
+    store.set("vd.format", v);
+    markSelected("vd-format", v);
+    $("vd-quality-row").hidden = AUDIO_ONLY.includes(v);
+    updateHint();
+  }
+  function setQuality(v) {
+    if (!$("vd-quality").querySelector(`button[data-v="${v}"]`)) v = "1080";
+    quality = v;
+    store.set("vd.quality", v);
+    markSelected("vd-quality", v);
+    updateHint();
+  }
+  $("vd-format").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-v]");
+    if (b) setFormat(b.dataset.v);
+  });
   $("vd-quality").addEventListener("click", (e) => {
-    const b = e.target.closest("button[data-q]");
-    if (b) setQuality(b.dataset.q);
+    const b = e.target.closest("button[data-v]");
+    if (b) setQuality(b.dataset.v);
   });
 
   // ---------- Folder ----------
@@ -124,7 +148,7 @@
     const btn = $("vd-download");
     btn.disabled = true;
     try {
-      const res = await api("/downloads", { method: "POST", body: { urls: links, quality, folder: folder() } });
+      const res = await api("/downloads", { method: "POST", body: { urls: links, format, quality, folder: folder() } });
       $("vd-links").value = "";
       const n = res.jobs.length;
       let msg = `Added ${n} download${n === 1 ? "" : "s"}.`;
@@ -149,12 +173,12 @@
     const parts = [];
     const item = job.item_count ? `Video ${job.item_index} of ${job.item_count}` : "";
     switch (job.status) {
-      case "queued": return { text: `Waiting · ${job.quality_label}` };
-      case "starting": return { text: `Getting video info… · ${job.quality_label}` };
+      case "queued": return { text: `Waiting · ${job.label}` };
+      case "starting": return { text: `Getting video info… · ${job.label}` };
       case "processing": return { text: [item, "Finishing up…"].filter(Boolean).join(" · ") };
       case "downloading":
         if (item) parts.push(item);
-        parts.push(`${Math.floor(job.percent)}%`);
+        parts.push(`${Math.floor(job.percent)}%`, job.label);
         if (job.total_bytes) parts.push(`${bytes(job.downloaded_bytes)} of ${bytes(job.total_bytes)}`);
         if (job.speed) parts.push(`${bytes(job.speed)}/s`);
         if (job.eta != null) parts.push(`${duration(job.eta)} left`);
@@ -234,13 +258,13 @@
     const list = $("vd-history");
     list.replaceChildren(...items.map((h) => {
       const kind = el("span", { class: "vd-kind" });
-      kind.innerHTML = h.quality === "audio" ? ICONS.audio : ICONS.video;
+      kind.innerHTML = h.audio ? ICONS.audio : ICONS.video;
       const name = h.path.split("/").pop();
       return el("li", {},
         kind,
         el("div", { class: "vd-job-main" },
           el("div", { class: "vd-title", title: h.path }, h.title || name),
-          el("div", { class: "vd-meta" }, [h.quality_label, bytes(h.size), clock(h.finished)].filter(Boolean).join(" · ")),
+          el("div", { class: "vd-meta" }, [h.label, bytes(h.size), clock(h.finished)].filter(Boolean).join(" · ")),
         ),
         el("div", { class: "vd-actions" }, iconButton("finder", "Show in Finder", () => reveal(h.path))),
       );
@@ -314,6 +338,7 @@
     }
   }
 
+  setFormat(format);
   setQuality(quality);
   folderInput.value = store.get("vd.folder", "");
   loadStatus();

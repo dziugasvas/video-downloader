@@ -2,18 +2,19 @@
    inside another app as a tab without clashing. */
 
 :root {
-  --vd-bg: #0c0e12;
-  --vd-panel: #14171d;
-  --vd-panel-2: #1a1e26;
-  --vd-border: #252a34;
-  --vd-border-strong: #333a47;
-  --vd-text: #e9ebf1;
-  --vd-muted: #8a91a2;
-  --vd-faint: #5c6373;
-  --vd-accent: #7c8cff;
-  --vd-accent-hover: #93a0ff;
+  --vd-bg: #000000;
+  --vd-panel: #111111;
+  --vd-panel-2: #1b1b1b;
+  --vd-border: #242424;
+  --vd-border-strong: #353535;
+  --vd-text: #f3f3f3;
+  --vd-muted: #9b9b9b;
+  --vd-faint: #616161;
+  --vd-accent: #e5262e;
+  --vd-accent-hover: #ff3d45;
+  --vd-accent-soft: rgba(229, 38, 46, .14);
   --vd-green: #4ade80;
-  --vd-red: #ff7a6b;
+  --vd-red: #ff6b6b;
   --vd-amber: #f5b85a;
   --vd-radius: 14px;
 }
@@ -39,10 +40,11 @@ button:disabled { cursor: default; opacity: .5; }
 .vd-brand { display: flex; align-items: center; gap: 12px; }
 .vd-brand h1 { font-size: 19px; font-weight: 650; letter-spacing: -.01em; margin: 0; }
 .vd-logo {
-  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
-  background: linear-gradient(145deg, #8e9bff, #5f6fe8);
-  box-shadow: 0 6px 20px -6px rgba(124, 140, 255, .6);
+  width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: none;
+  background: linear-gradient(145deg, #ff4d54, #b5121a);
+  box-shadow: 0 8px 24px -8px rgba(229, 38, 46, .75);
 }
+.vd-sub { margin: 1px 0 0; color: var(--vd-muted); font-size: 12.5px; }
 .vd-logo svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .vd-warnings { display: flex; gap: 8px; flex-wrap: wrap; }
 .vd-warning {
@@ -60,9 +62,13 @@ button:disabled { cursor: default; opacity: .5; }
   transition: border-color .15s;
 }
 .vd-new textarea::placeholder { color: var(--vd-faint); font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; }
-.vd-new textarea:focus { outline: none; border-color: var(--vd-accent); }
+.vd-new textarea:focus { outline: none; border-color: rgba(229, 38, 46, .7); box-shadow: 0 0 0 3px var(--vd-accent-soft); }
 
-.vd-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.vd-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.vd-options { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.vd-opt { display: flex; align-items: center; gap: 12px; }
+.vd-opt[hidden] { display: none; }
+.vd-opt-label { width: 52px; flex: none; color: var(--vd-muted); font-size: 12.5px; font-weight: 550; }
 
 .vd-seg { display: inline-flex; background: var(--vd-bg); border: 1px solid var(--vd-border); border-radius: 10px; padding: 3px; }
 .vd-seg button {
@@ -70,10 +76,10 @@ button:disabled { cursor: default; opacity: .5; }
   font-weight: 550; font-size: 13.5px; transition: background .15s, color .15s;
 }
 .vd-seg button:hover { color: var(--vd-text); }
-.vd-seg button[aria-checked="true"] { background: var(--vd-panel-2); color: var(--vd-text); box-shadow: inset 0 0 0 1px var(--vd-border-strong); }
+.vd-seg button[aria-checked="true"] { background: var(--vd-accent-soft); color: #fff; box-shadow: inset 0 0 0 1px rgba(229, 38, 46, .55); }
 
 .vd-btn { border-radius: 10px; border: 1px solid transparent; padding: 9px 16px; font-weight: 600; font-size: 14px; transition: background .15s, border-color .15s, color .15s; white-space: nowrap; }
-.vd-primary { background: var(--vd-accent); color: #0b0d1a; }
+.vd-primary { background: var(--vd-accent); color: #fff; box-shadow: 0 6px 20px -8px rgba(229, 38, 46, .8); }
 .vd-primary:hover:not(:disabled) { background: var(--vd-accent-hover); }
 .vd-primary kbd { font: 500 11.5px -apple-system, sans-serif; opacity: .55; margin-left: 6px; }
 .vd-ghost { background: transparent; border-color: var(--vd-border); color: var(--vd-muted); padding: 7px 12px; font-size: 13px; font-weight: 550; }
@@ -123,7 +129,7 @@ button:disabled { cursor: default; opacity: .5; }
 .vd-job[data-status="queued"] .vd-bar > div,
 .vd-job[data-status="starting"] .vd-bar > div,
 .vd-job[data-status="processing"] .vd-bar > div {
-  background: linear-gradient(90deg, var(--vd-accent) 0 40%, #a5b0ff 50%, var(--vd-accent) 60% 100%);
+  background: linear-gradient(90deg, var(--vd-accent) 0 40%, #ff8a8f 50%, var(--vd-accent) 60% 100%);
   background-size: 250% 100%; animation: vd-shimmer 1.4s linear infinite;
 }
 .vd-job[data-status="queued"] .vd-bar > div { opacity: .35; }
@@ -153,5 +159,6 @@ button:disabled { cursor: default; opacity: .5; }
 @media (max-width: 560px) {
   .vd { padding: 24px 14px; }
   .vd-row { flex-direction: column; align-items: stretch; }
-  .vd-seg button { flex: 1; padding: 7px 6px; }
+  .vd-opt { flex-direction: column; align-items: stretch; gap: 6px; }
+  .vd-seg button { flex: 1; padding: 7px 4px; }
 }

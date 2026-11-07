@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Video Downloader</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%237c8cff'/><path d='M16 8v12m-5-5 5 5 5-5M10 24h12' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23e5262e'/><path d='M16 8v12m-5-5 5 5 5-5M10 24h12' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
 <body data-api="api">
@@ -14,27 +14,46 @@
         <span class="vd-logo" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M6 19.5h12"/></svg>
         </span>
-        <h1>Video Downloader</h1>
+        <div>
+          <h1>Video Downloader</h1>
+          <p class="vd-sub">YouTube and 1,000+ other sites</p>
+        </div>
       </div>
       <div id="vd-warnings" class="vd-warnings"></div>
     </header>
 
     <section class="vd-card vd-new">
       <textarea id="vd-links" rows="3" spellcheck="false"
-        placeholder="Paste YouTube links, one per line. Playlist links download the whole playlist."></textarea>
+        placeholder="Paste video links, one per line: YouTube, Vimeo, TikTok, X and more. Playlist links download the whole playlist."></textarea>
 
       <div class="vd-row">
-        <div class="vd-seg" id="vd-quality" role="radiogroup" aria-label="Quality">
-          <button type="button" role="radio" data-q="720">720p</button>
-          <button type="button" role="radio" data-q="1080">1080p</button>
-          <button type="button" role="radio" data-q="best">Best</button>
-          <button type="button" role="radio" data-q="audio">Audio only</button>
+        <div class="vd-options">
+          <div class="vd-opt">
+            <span class="vd-opt-label" id="vd-format-label">Format</span>
+            <div class="vd-seg" id="vd-format" role="radiogroup" aria-labelledby="vd-format-label">
+              <button type="button" role="radio" data-v="mp4">MP4</button>
+              <button type="button" role="radio" data-v="mkv">MKV</button>
+              <button type="button" role="radio" data-v="mp3">MP3</button>
+              <button type="button" role="radio" data-v="m4a">M4A</button>
+            </div>
+          </div>
+          <div class="vd-opt" id="vd-quality-row">
+            <span class="vd-opt-label" id="vd-quality-label">Quality</span>
+            <div class="vd-seg" id="vd-quality" role="radiogroup" aria-labelledby="vd-quality-label">
+              <button type="button" role="radio" data-v="480">480p</button>
+              <button type="button" role="radio" data-v="720">720p</button>
+              <button type="button" role="radio" data-v="1080">1080p</button>
+              <button type="button" role="radio" data-v="1440">1440p</button>
+              <button type="button" role="radio" data-v="2160">4K</button>
+              <button type="button" role="radio" data-v="best">Best</button>
+            </div>
+          </div>
         </div>
         <button id="vd-download" class="vd-btn vd-primary" type="button">
           Download <kbd>⌘↵</kbd>
         </button>
       </div>
-      <p id="vd-quality-hint" class="vd-hint"></p>
+      <p id="vd-hint" class="vd-hint"></p>
 
       <div class="vd-folder">
         <svg class="vd-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>

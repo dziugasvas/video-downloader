@@ -9,10 +9,10 @@ This module has no web code. It can be reused by any app.
 
 from __future__ import annotations
 
-import glob
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from .formats import QUALITIES, format_options
+from . import formats
 
 DEFAULT_FOLDER = str(Path.home() / "Downloads" / "Videos")
 
@@ -40,11 +40,14 @@ _TAGS = ("VD_ITEM ", "VD_SIZES ", "VD_PROG ", "VD_POST ", "VD_FILE ")
 
 ACTIVE = ("queued", "starting", "downloading", "processing")
 
+TEMP_DIR = ".video-downloader-temp"  # hidden, inside the download folder
+
 
 @dataclass
 class Job:
     id: str
     url: str
+    format: str
     quality: str
     folder: str
     status: str = "queued"  # queued|starting|downloading|processing|done|error|cancelled
@@ -64,64 +67,100 @@ class Job:
 
     def public(self) -> dict:
         data = asdict(self)
-        data["quality_label"] = QUALITIES.get(self.quality, self.quality)
+        data["label"] = formats.label(self.format, self.quality)
         return data
 
 
-def build_command(url: str, quality: str, folder: str) -> list[str]:
-    fmt, sort = format_options(quality)
+def build_command(url: str, fmt: str, quality: str, folder: str, temp: str) -> list[str]:
     cmd = [
         sys.executable, "-m", "yt_dlp",
         "--newline", "--progress", "--no-simulate", "--no-colors",
-        "-f", fmt, "-S", ",".join(sort),
+        *formats.ytdlp_args(fmt, quality),
         "-P", folder, "-o", OUTPUT_TEMPLATE,
+        # Unfinished pieces go to a private temp folder per download, so two
+        # downloads of the same video never get in each other's way.
+        "-P", f"temp:{temp}",
         # A link to a video that's inside a playlist downloads just that video;
         # a playlist link (youtube.com/playlist?list=...) downloads the playlist.
         "--no-playlist",
         # Set the file date to "now" so new downloads sort to the top in Finder.
         "--no-mtime",
         "--print", "before_dl:VD_ITEM %(.{id,title,playlist_index,n_entries,playlist_count})j",
-        "--print", "before_dl:VD_SIZES %(requested_formats.:.{filesize,filesize_approx})j",
+        "--print", "before_dl:VD_SIZES %(requested_formats.:.{format_id,filesize,filesize_approx})j",
         "--print", "after_move:VD_FILE %(filepath)j",
         "--progress-template",
         "download:VD_PROG %(progress.{status,downloaded_bytes,total_bytes,total_bytes_estimate,speed,eta,filename})j",
         "--progress-template", "postprocess:VD_POST %(progress.{status,postprocessor})j",
     ]
-    if quality == "audio":
-        cmd += ["-x", "--audio-format", "m4a", "--embed-metadata"]
-    else:
-        cmd += ["--merge-output-format", "mp4", "--remux-video", "mp4"]
     cmd += ["--", url]
     return cmd
 
 
 class _Run:
-    """Progress bookkeeping for the item currently being downloaded."""
+    """Progress of the item (video) currently being downloaded.
+
+    A YouTube video is usually two streams (video + audio) downloaded one after
+    the other. Each progress line is matched to its stream by the format id in
+    the file name (e.g. "Title.f137.mp4"), so the overall percentage and the
+    byte counts always agree.
+    """
 
     def __init__(self) -> None:
-        self.part_weights: list[float] = [1.0]
-        self.part = 0
+        self.parts: list[dict] = []  # {"id", "size"} from VD_SIZES
+        self.done: dict[int, float] = {}  # part index -> downloaded bytes
+        self.total: dict[int, float] = {}  # part index -> total bytes
         self.part_files: list[str] = []
-        self.current_file: str | None = None
 
-    def new_item(self, sizes) -> None:
-        weights = []
-        if isinstance(sizes, list) and sizes:
+    def new_item(self, sizes=None) -> None:
+        self.parts = []
+        if isinstance(sizes, list):
             for s in sizes:
                 s = s or {}
-                weights.append(float(s.get("filesize") or s.get("filesize_approx") or 0))
-            if not all(weights):
-                weights = [1.0] * len(sizes)
-        self.part_weights = weights or [1.0]
-        self.part = 0
-        self.part_files = []
-        self.current_file = None
+                size = s.get("filesize") or s.get("filesize_approx")
+                self.parts.append({"id": str(s.get("format_id") or ""), "size": float(size) if size else None})
+        self.done, self.total, self.part_files = {}, {}, []
 
-    def fraction(self, part_fraction: float) -> float:
-        total = sum(self.part_weights)
-        i = min(self.part, len(self.part_weights) - 1)
-        done = sum(self.part_weights[:i])
-        return (done + self.part_weights[i] * part_fraction) / total
+    def _index(self, filename: str) -> int:
+        m = re.search(r"\.f([^.]+)\.\w+(?:\.part)?$", filename or "")
+        if m:
+            for i, part in enumerate(self.parts):
+                if part["id"] == m.group(1):
+                    return i
+        return 0
+
+    def update(self, filename: str | None, downloaded: float, total: float | None, finished: bool) -> None:
+        if filename and filename not in self.part_files:
+            self.part_files.append(filename)
+        i = self._index(filename or "")
+        if total:
+            self.total[i] = float(total)
+        if finished and i in self.total:
+            downloaded = self.total[i]
+        self.done[i] = float(downloaded)
+
+    def _sizes(self) -> list[float | None]:
+        n = max(len(self.parts), (max(self.total) + 1) if self.total else 1)
+        out = []
+        for i in range(n):
+            known = self.total.get(i) or (self.parts[i]["size"] if i < len(self.parts) else None)
+            out.append(known)
+        return out
+
+    def fraction(self) -> float:
+        sizes = self._sizes()
+        if all(sizes):
+            return min(sum(self.done.values()) / sum(sizes), 1.0)
+        # Sizes unknown: count each stream equally.
+        fracs = [min(self.done.get(i, 0) / s, 1.0) if s else 0.0 for i, s in enumerate(sizes)]
+        return sum(fracs) / len(fracs)
+
+    def bytes(self) -> tuple[int, int | None]:
+        sizes = self._sizes()
+        return int(sum(self.done.values())), (int(sum(sizes)) if all(sizes) else None)
+
+    def last_part_finished(self) -> bool:
+        sizes = self._sizes()
+        return all(s and self.done.get(i, 0) >= s for i, s in enumerate(sizes))
 
 
 class DownloadManager:
@@ -134,14 +173,13 @@ class DownloadManager:
 
     # ---- public API -----------------------------------------------------
 
-    def add(self, url: str, quality: str, folder: str | None = None) -> Job:
-        if quality not in QUALITIES:
-            raise ValueError(f"Unknown quality: {quality}")
+    def add(self, url: str, fmt: str, quality: str, folder: str | None = None) -> Job:
+        formats.validate(fmt, quality)
         url = url.strip()
         if not re.match(r"^https?://", url):
             raise ValueError(f"Not a link: {url}")
         folder = os.path.abspath(os.path.expanduser(folder or DEFAULT_FOLDER))
-        job = Job(id=uuid.uuid4().hex[:10], url=url, quality=quality, folder=folder)
+        job = Job(id=uuid.uuid4().hex[:10], url=url, format=fmt, quality=quality, folder=folder)
         with self._lock:
             self._jobs[job.id] = job
         self._pool.submit(self._run, job.id)
@@ -209,8 +247,9 @@ class DownloadManager:
             job.status = "starting"
         try:
             os.makedirs(job.folder, exist_ok=True)
+            temp = os.path.join(job.folder, TEMP_DIR, job.id)
             proc = subprocess.Popen(
-                build_command(job.url, job.quality, job.folder),
+                build_command(job.url, job.format, job.quality, job.folder, temp),
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 stdin=subprocess.DEVNULL, text=True, bufsize=1,
                 start_new_session=True,  # own process group, so cancel stops ffmpeg too
@@ -243,11 +282,11 @@ class DownloadManager:
             self._handle(job, run, tag, data)
 
         proc.wait()
+        _remove_temp(job.folder, temp)  # leftovers of a cancelled or failed download
         with self._lock:
             self._procs.pop(job_id, None)
             cancelled = job.status == "cancelled"
         if cancelled:
-            _remove_partial_files(run)
             return
         if job.files and (proc.returncode == 0 or job.item_count):
             msg = ""
@@ -274,21 +313,23 @@ class DownloadManager:
             elif tag == "VD_SIZES":
                 run.new_item(data)
             elif tag == "VD_PROG" and isinstance(data, dict):
-                fname = data.get("filename")
-                if fname and fname != run.current_file:
-                    if run.current_file is not None:
-                        run.part += 1
-                    run.current_file = fname
-                    run.part_files.append(fname)
-                done = data.get("downloaded_bytes") or 0
-                total = data.get("total_bytes") or data.get("total_bytes_estimate")
-                frac = 1.0 if data.get("status") == "finished" else (min(done / total, 1.0) if total else 0.0)
+                finished = data.get("status") == "finished"
+                run.update(
+                    data.get("filename"),
+                    data.get("downloaded_bytes") or 0,
+                    data.get("total_bytes") or data.get("total_bytes_estimate"),
+                    finished,
+                )
+                done, total = run.bytes()
+                speed = data.get("speed")
                 job.status = "downloading"
-                job.downloaded_bytes, job.total_bytes = int(done), int(total) if total else None
-                job.speed = data.get("speed")
-                job.eta = int(data["eta"]) if data.get("eta") is not None else None
-                job.percent = _overall(job, run.fraction(frac))
-                if data.get("status") == "finished" and run.part >= len(run.part_weights) - 1:
+                job.downloaded_bytes, job.total_bytes, job.speed = done, total, speed
+                if total and speed:
+                    job.eta = int(max(total - done, 0) / speed)  # time left for the whole video
+                else:
+                    job.eta = int(data["eta"]) if data.get("eta") is not None else None
+                job.percent = _overall(job, run.fraction())
+                if finished and run.last_part_finished():
                     job.status, job.speed, job.eta = "processing", None, None
             elif tag == "VD_POST" and isinstance(data, dict):
                 if data.get("status") == "started" and data.get("postprocessor") != "MoveFiles":
@@ -307,8 +348,9 @@ class DownloadManager:
                         "title": job.title or os.path.basename(data),
                         "path": data,
                         "size": size,
-                        "quality": job.quality,
-                        "quality_label": QUALITIES.get(job.quality, job.quality),
+                        "format": job.format,
+                        "audio": formats.FORMATS[job.format]["audio_only"],
+                        "label": formats.label(job.format, job.quality),
                         "finished": time.time(),
                     })
                 job.percent = _overall(job, 1.0)
@@ -338,19 +380,9 @@ def _clean_error(line: str) -> str:
     return msg[:500]
 
 
-def _remove_partial_files(run: _Run) -> None:
-    """Delete leftovers of the item that was being downloaded when cancelled."""
-    patterns = set()
-    for f in run.part_files:
-        esc = glob.escape(f)
-        patterns.update({esc + ".part", esc + ".part-Frag*", esc + ".ytdl"})
-        base, is_part = re.subn(r"\.f[\w-]+\.\w+$", "", f)
-        if is_part:  # separate video/audio stream, never a finished file
-            patterns.add(esc)
-            patterns.add(glob.escape(base) + ".temp.*")
-    for pattern in patterns:
-        for path in glob.glob(pattern):
-            try:
-                os.remove(path)
-            except OSError:
-                pass
+def _remove_temp(folder: str, temp: str) -> None:
+    shutil.rmtree(temp, ignore_errors=True)
+    try:
+        os.rmdir(os.path.join(folder, TEMP_DIR))  # only succeeds when empty
+    except OSError:
+        pass

@@ -53,16 +53,21 @@ fi
 command -v ffmpeg >/dev/null 2>&1 || echo "WARNING: ffmpeg not found. Install it with: brew install ffmpeg"
 command -v deno   >/dev/null 2>&1 || echo "WARNING: Deno not found (YouTube needs it). Install it with: brew install deno"
 
-# Open the browser as soon as the server answers.
+# Open the browser as soon as the server answers (the very first start can take ~20 s).
 (
-  for _ in $(seq 1 60); do
-    if curl -fsS -o /dev/null "$URL/api/downloads" 2>/dev/null; then open "$URL"; exit 0; fi
+  for _ in $(seq 1 240); do
+    if curl -fsS -o /dev/null "$URL/api/downloads" 2>/dev/null; then
+      echo ""
+      echo "Video Downloader is running at $URL"
+      echo "Keep this window open while you use it. Press Ctrl+C to quit."
+      echo ""
+      open "$URL"
+      exit 0
+    fi
     sleep 0.25
   done
+  echo "Still starting... if the browser doesn't open, go to $URL"
 ) &
 
-echo ""
-echo "Video Downloader is running at $URL"
-echo "Keep this window open while you use it. Press Ctrl+C to quit."
-echo ""
+echo "Starting Video Downloader (please wait)..."
 exec .venv/bin/python main.py
